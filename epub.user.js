@@ -1,12 +1,12 @@
 // ==UserScript==
-// @name         华艺下载器(EPUB)
+// @name         华艺下载器
 // @namespace    https://qinlili.bid
-// @version      0.1
-// @description  暂仅支持EPUB
+// @version      0.2
+// @description  EPUB支持
 // @author       琴梨梨
-// @match        https://www.airitibooks.com/epubViewer3/text.aspx?*
+// @match        https://www.airitibooks.com/EpubViewer/index.html*
+// @match        https://www.airitibooks.com/epubViewer3/text.aspx*
 // @icon         https://www.airitibooks.com/favicon.ico
-// @require      https://cdn.jsdelivr.net/npm/jszip@3.6.0/dist/jszip.min.js
 // @license      MPLv2
 // @run-at       document-end
 // @grant        none
@@ -17,11 +17,10 @@
 
     //==========================================
     //          项目代号:TUBOKURARINE
-    //                版本:0.1
+    //                版本:0.2
     //               琴梨梨 2022
     //           DEVELOPED IN VSCODE
     //     已添加内建依赖:SakiProgress 1.0.4
-    //        已添加外部依赖:jsZip 3.6.0
     //            本项目完全免费开源
     //==========================================
     //   推荐使用ctfile.qinlili.bid解析城通网盘
@@ -201,96 +200,123 @@
     };
     console.log(`==========================================
           项目代号:TUBOKURARINE
-                版本:0.1
+                版本:0.2
                琴梨梨 2022
            DEVELOPED IN VSCODE
      已添加内建依赖:SakiProgress 1.0.4
-        已添加外部依赖:jsZip 3.6.0
             本项目完全免费开源
 ==========================================
    推荐使用ctfile.qinlili.bid解析城通网盘
    推荐使用t.qinlili.bid/caj云转换CAJ文件
 ==========================================`);
     SakiProgress.init();
-    const btnBack = document.getElementById("btnBack");
-    btnBack.removeAttribute("onclick");
-    let inDownload = false;
-    btnBack.addEventListener("click", async () => {
-        if (!inDownload) {
-            //开始下载
-            let fileList = [];
-            inDownload = true;
-            SakiProgress.showDiv();
-            SakiProgress.setText("正在准备下载...");
-            console.log("Igniting Tubokurarine Core ...");
-            const info = window.reader;
-            console.log(info);
-            const basePath = info.settings.bookPath;
-            await sleep(100);
-            SakiProgress.setPercent(1);
-            SakiProgress.setText("正在读取EPUB信息...");
-            let container = await (await fetch(basePath + "META-INF/container.xml")).blob();
-            fileList.push({ file: container, path: "META-INF/container.xml" });
-            let containerParsed = new DOMParser().parseFromString(await container.text(), "text/xml");
-            console.log(containerParsed);
-            await sleep(100);
-            SakiProgress.setPercent(3);
-            SakiProgress.setText("正在读取文件清单...");
-            let rootfile = containerParsed.getElementsByTagName("rootfile")[0];
-            if (rootfile.getAttribute("media-type") == "application/oebps-package+xml" || confirm("该书的信息似乎不符合标准，继续吗？")) {
-                //OEBPS/content.opf
-                let itemPath = rootfile.getAttribute("full-path");
-                console.log(basePath + itemPath);
-                let opf = await (await fetch(basePath + itemPath)).blob();
-                fileList.push({ file: opf, path: itemPath });
-                let opfParsed = new DOMParser().parseFromString(await opf.text(), "text/xml");
-                console.log(opfParsed);
-                await sleep(100);
-                SakiProgress.setPercent(5);
-                SakiProgress.setText("正在索引文件...");
-                let itemList = opfParsed.getElementsByTagName("item");
-                let baseItemPath = basePath + itemPath.substring(0, itemPath.lastIndexOf("/")) + "/";
-                let zipPath = itemPath.substring(0, itemPath.lastIndexOf("/"))+ "/"
-                for (let i = 0; itemList[i]; i++) {
-                    SakiProgress.setPercent(5 + i / itemList.length * 80);
-                    SakiProgress.setText("正在下载文件[" + i + "/" + itemList.length + "]...");
-                    let item = itemList[i];
-                    if (item.getAttribute("href")) {
-                        let itemBlob = await (await fetch(baseItemPath + item.getAttribute("href"))).blob();
-                        let path = zipPath + item.getAttribute("href");
-                        fileList.push({ file: itemBlob, path: path });
+    switch (location.pathname) {
+        case '/EpubViewer/index.html': {
+            (open=> {
+                XMLHttpRequest.prototype.open = function (method, url, async, user, pass) {
+                    if (!(async === false)) {
+                        async = true;
+                    };
+                    if (url.indexOf("DownloadEpub")>0) {
+                        console.log("Catch XHR! " + url + " -Qinlili")
+                        this.addEventListener('load', event=>{
+                            console.log("下载完成了喵！正在导出文件！");
+                            const pdfFile=URL.createObjectURL(new Blob([this.response]));
+                            console.log(pdfFile);
+                            dlFile(pdfFile,Date.now()+".epub");
+                        });
                     }
+                    open.call(this, method, url, async, user, pass);
                 };
-                console.log(fileList);
-                SakiProgress.setPercent(85);
-                SakiProgress.setText("正在生成文件结构...");
-                let zip = new JSZip();
-                fileList.forEach(file => zip.file(file.path, file.file, { binary: true }));
-                await sleep(100);
-                SakiProgress.setPercent(90);
-                SakiProgress.setText("正在打包...");
-                let zipFile = await zip.generateAsync({
-                    type: "blob",
-                    compression: "DEFLATE",
-                    compressionOptions: {
-                        level: 9
+            })(XMLHttpRequest.prototype.open);
+            break;
+        };
+        case '/epubViewer3/text.aspx': {
+            const btnBack = document.getElementById("btnBack");
+            btnBack.removeAttribute("onclick");
+            let inDownload = false;
+            btnBack.addEventListener("click", async () => {
+                if (!inDownload) {
+                    //开始下载
+                    let fileList = [];
+                    inDownload = true;
+                    SakiProgress.showDiv();
+                    SakiProgress.setText("正在准备下载...");
+                    console.log("Igniting Tubokurarine Core ...");
+                    const info = window.reader;
+                    console.log(info);
+                    const basePath = info.settings.bookPath;
+                    await sleep(100);
+                    SakiProgress.setPercent(1);
+                    SakiProgress.setText("正在读取EPUB信息...");
+                    let container = await (await fetch(basePath + "META-INF/container.xml")).blob();
+                    fileList.push({ file: container, path: "META-INF/container.xml" });
+                    let containerParsed = new DOMParser().parseFromString(await container.text(), "text/xml");
+                    console.log(containerParsed);
+                    await sleep(100);
+                    SakiProgress.setPercent(3);
+                    SakiProgress.setText("正在读取文件清单...");
+                    let rootfile = containerParsed.getElementsByTagName("rootfile")[0];
+                    if (rootfile.getAttribute("media-type") == "application/oebps-package+xml" || confirm("该书的信息似乎不符合标准，继续吗？")) {
+                        //OEBPS/content.opf
+                        let itemPath = rootfile.getAttribute("full-path");
+                        console.log(basePath + itemPath);
+                        let opf = await (await fetch(basePath + itemPath)).blob();
+                        fileList.push({ file: opf, path: itemPath });
+                        let opfParsed = new DOMParser().parseFromString(await opf.text(), "text/xml");
+                        console.log(opfParsed);
+                        await sleep(100);
+                        SakiProgress.setPercent(5);
+                        SakiProgress.setText("正在索引文件...");
+                        let itemList = opfParsed.getElementsByTagName("item");
+                        let baseItemPath = basePath + itemPath.substring(0, itemPath.lastIndexOf("/")) + "/";
+                        let zipPath = itemPath.substring(0, itemPath.lastIndexOf("/")) + "/"
+                        for (let i = 0; itemList[i]; i++) {
+                            SakiProgress.setPercent(5 + i / itemList.length * 80);
+                            SakiProgress.setText("正在下载文件[" + i + "/" + itemList.length + "]...");
+                            let item = itemList[i];
+                            if (item.getAttribute("href")) {
+                                let itemBlob = await (await fetch(baseItemPath + item.getAttribute("href"))).blob();
+                                let path = zipPath + item.getAttribute("href");
+                                fileList.push({ file: itemBlob, path: path });
+                            }
+                        };
+                        console.log(fileList);
+                        SakiProgress.setPercent(85);
+                        SakiProgress.setText("正在生成文件结构...");
+                        let zip = new JSZip();
+                        fileList.forEach(file => zip.file(file.path, file.file, { binary: true }));
+                        await sleep(100);
+                        SakiProgress.setPercent(90);
+                        SakiProgress.setText("正在打包...");
+                        let zipFile = await zip.generateAsync({
+                            type: "blob",
+                            compression: "DEFLATE",
+                            compressionOptions: {
+                                level: 9
+                            }
+                        });
+                        SakiProgress.setPercent(97);
+                        SakiProgress.setText("正在导出...");
+                        await sleep(2000);
+                        dlFile(URL.createObjectURL(zipFile), document.title + ".epub");
+                        SakiProgress.clearProgress();
+                        SakiProgress.setText("下载成功！");
+                        await sleep(3000);
+                        inDownload = false;
+                        SakiProgress.hideDiv();
+                    } else {
+                        SakiProgress.clearProgress();
+                        SakiProgress.hideDiv();
+                        console.log("User Cancel.");
+                        inDownload = false;
                     }
-                });
-                SakiProgress.setPercent(97);
-                SakiProgress.setText("正在导出...");
-                await sleep(2000);
-                dlFile(URL.createObjectURL(zipFile), document.title + ".epub");
-                SakiProgress.clearProgress();
-                SakiProgress.setText("下载成功！");
-                await sleep(3000);
-                inDownload = false;
-                SakiProgress.hideDiv();
-            } else {
-                SakiProgress.clearProgress();
-                SakiProgress.hideDiv();
-                console.log("User Cancel.");
-                inDownload = false;
-            }
+                }
+            })
+            break;
+        };
+        default: {
+            break;
         }
-    })
+    }
 })();
